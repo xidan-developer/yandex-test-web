@@ -1,19 +1,6 @@
 (() => {
   "use strict";
   const flsModules = {};
-  function isWebp() {
-    function testWebP(callback) {
-      let webP = new Image();
-      webP.onload = webP.onerror = function () {
-        callback(webP.height == 2);
-      };
-      webP.src = "data:image/webp;base64,UklGRjoAAABXRUJQVlA4IC4AAACyAgCdASoCAAIALmk0mk0iIiIiIgBoSygABc6WWgAA/veff/0PP8bA//LwYAAA";
-    }
-    testWebP(function (support) {
-      let className = support === true ? "webp" : "no-webp";
-      document.documentElement.classList.add(className);
-    });
-  }
   function getHash() {
     if (location.hash) return location.hash.replace("#", "");
   }
@@ -82,7 +69,6 @@
       FLS(`[gotoBlock]: Юхуу...едем в ${targetBlock}`);
     } else FLS(`[gotoBlock]: Ей... Такого блока нет на странице: ${targetBlock}`);
   };
-  let addWindowScrollEvent = false;
   function pageNavigation() {
     document.addEventListener("click", pageNavigationAction);
     document.addEventListener("watcherCallback", pageNavigationAction);
@@ -132,14 +118,6 @@
       goToHash ? gotoBlock(goToHash, true, 500, 20) : null;
     }
   }
-  setTimeout(() => {
-    if (addWindowScrollEvent) {
-      let windowScroll = new Event("windowScroll");
-      window.addEventListener("scroll", function (e) {
-        document.dispatchEvent(windowScroll);
-      });
-    }
-  }, 0);
   const marquee = () => {
     const $marqueeArray = document.querySelectorAll("[data-marquee]");
     const CLASS_NAMES = {
@@ -549,13 +527,20 @@
     }
     on(prevBtn, "click", () => !isAnimating && goTo(current - SHOW_PER_PAGE, "prev"));
     on(nextBtn, "click", () => !isAnimating && goTo(current + SHOW_PER_PAGE, "next"));
-    on(window, "resize", layout);
-    on(window, "DOMContentLoaded", () => {
+    let stagesLayoutRaf = 0;
+    const scheduleStagesLayout = () => {
+      cancelAnimationFrame(stagesLayoutRaf);
+      stagesLayoutRaf = requestAnimationFrame(layout);
+    };
+    on(window, "resize", scheduleStagesLayout);
+    const initStages = () => {
       saveOriginalHtml();
       buildPagination();
       layout();
       updateDots();
-    });
+    };
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initStages);
+    else initStages();
   })();
   (() => {
     const root = $(".participants");
@@ -588,7 +573,6 @@
       const x = -index * (slideWidth + getGap());
       track.style.transform = `translateX(${x}px)`;
       currentEls.forEach((e) => (e.textContent = index + 1));
-      viewport.setAttribute("aria-live", "polite");
     };
     const updateButtons = () => {
       const m = maxIndex();
@@ -689,6 +673,5 @@
     startAuto();
   })();
   window["FLS"] = false;
-  isWebp();
   pageNavigation();
 })();
