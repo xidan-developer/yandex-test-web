@@ -1239,12 +1239,14 @@ a:focus-visible {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  * {
-    -webkit-animation-duration: NaNs !important;
-    animation-duration: NaNs !important;
+  *,
+  *::before,
+  *::after {
+    -webkit-animation-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
     -webkit-animation-iteration-count: 1 !important;
     animation-iteration-count: 1 !important;
-    transition-duration: NaNs !important;
+    transition-duration: 0.01ms !important;
   }
 }
 @media (any-hover: hover) {

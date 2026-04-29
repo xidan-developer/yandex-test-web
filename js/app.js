@@ -407,6 +407,287 @@
   }
   const da = new DynamicAdapt("max");
   da.init();
+  const $ = (sel, root = document) => root.querySelector(sel);
+  const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+  const on = (el, ev, fn, opts) => el && el.addEventListener(ev, fn, opts);
+  (() => {
+    const slides = $$(".stages__item");
+    if (!slides.length) return;
+    const prevBtn = $(".stages__nav--prev");
+    const nextBtn = $(".stages__nav--next");
+    const pagination = $(".stages__pagination");
+    const SHOW_PER_PAGE = 1;
+    const ANIM_MS = 400;
+    const DESKTOP_BP = 768;
+    const BR_RESTORE_BP = 991;
+    let current = 0;
+    let isAnimating = false;
+    let dots = [];
+    function buildPagination() {
+      if (!pagination) return;
+      const pages = Math.ceil(slides.length / SHOW_PER_PAGE);
+      pagination.innerHTML = "";
+      dots = [];
+      for (let i = 0; i < pages; i++) {
+        const btn = document.createElement("span");
+        btn.type = "span";
+        btn.className = "stages__dot";
+        btn.setAttribute("aria-label", `Слайд ${i + 1}`);
+        on(btn, "click", () => {
+          if (isAnimating) return;
+          const target = i * SHOW_PER_PAGE;
+          const dir = target > current ? "next" : "prev";
+          goTo(target, dir);
+        });
+        pagination.appendChild(btn);
+        dots.push(btn);
+      }
+      updateDots();
+    }
+    function updateDots() {
+      if (!dots.length) return;
+      const page = Math.floor(current / SHOW_PER_PAGE);
+      dots.forEach((d, i) => d.classList.toggle("is-active", i === page));
+    }
+    function updateButtons() {
+      const max = slides.length - SHOW_PER_PAGE;
+      prevBtn?.classList.toggle("is-disabled", current <= 0);
+      nextBtn?.classList.toggle("is-disabled", current >= max);
+    }
+    function cleanAll() {
+      for (const s of slides) {
+        s.classList.remove("is-active", "is-prev", "is-next");
+        s.style.zIndex = "";
+      }
+    }
+    function hardSetActive(i) {
+      slides.forEach((s, idx) => {
+        s.classList.toggle("is-active", idx === i);
+        s.classList.remove("is-prev", "is-next");
+        s.style.zIndex = idx === i ? "2" : "";
+      });
+    }
+    function clamp(i) {
+      const max = slides.length - SHOW_PER_PAGE;
+      return Math.max(0, Math.min(i, max));
+    }
+    function applyDirectionClasses(nextIndex, direction) {
+      if (isAnimating) return;
+      isAnimating = true;
+      const oldSlide = slides[current];
+      const newSlide = slides[nextIndex];
+      if (!oldSlide || !newSlide) {
+        isAnimating = false;
+        return;
+      }
+      slides.forEach((s) => (s.style.zIndex = ""));
+      oldSlide.classList.remove("is-active", "is-prev", "is-next");
+      oldSlide.classList.add(direction === "next" ? "is-prev" : "is-next");
+      oldSlide.style.zIndex = "1";
+      newSlide.classList.remove("is-active", "is-prev", "is-next");
+      newSlide.classList.add(direction === "next" ? "is-next" : "is-prev");
+      newSlide.style.zIndex = "2";
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          newSlide.classList.remove("is-prev", "is-next");
+          newSlide.classList.add("is-active");
+        });
+      });
+      setTimeout(() => {
+        hardSetActive(nextIndex);
+        isAnimating = false;
+      }, ANIM_MS + 40);
+    }
+    function saveOriginalHtml() {
+      $$(".stages__text").forEach((el) => (el.dataset.originalHtml = el.innerHTML));
+    }
+    function removeBr() {
+      $$(".stages__text").forEach((el) => el.querySelectorAll("br").forEach((br) => br.remove()));
+    }
+    function restoreBr() {
+      $$(".stages__text").forEach((el) => {
+        if (el.dataset.originalHtml) el.innerHTML = el.dataset.originalHtml;
+      });
+    }
+    function updateActiveCards() {
+      const active = $$(".stages__item.is-active");
+      active.forEach((item) => {
+        const cards = $$(".stages__card", item);
+        cards.forEach((card, i) => {
+          card.classList.toggle("is-active", i !== cards.length - 1);
+          card.classList.toggle("is-active-last", i === cards.length - 1);
+        });
+      });
+    }
+    function goTo(targetIndex, dir = "next") {
+      const nextIndex = clamp(targetIndex);
+      if (nextIndex === current || isAnimating) return;
+      if (window.innerWidth <= DESKTOP_BP) applyDirectionClasses(nextIndex, dir);
+      else {
+        cleanAll();
+        slides.forEach((s) => s.classList.add("is-active"));
+      }
+      current = nextIndex;
+      updateButtons();
+      updateDots();
+      updateActiveCards();
+    }
+    function layout() {
+      if (window.innerWidth > BR_RESTORE_BP) restoreBr();
+      else removeBr();
+      if (window.innerWidth > DESKTOP_BP) {
+        cleanAll();
+        slides.forEach((s) => s.classList.add("is-active"));
+      } else {
+        cleanAll();
+        const curSlide = slides[current] || slides[0];
+        curSlide?.classList.add("is-active");
+        if (curSlide) curSlide.style.zIndex = "2";
+      }
+      updateButtons();
+      updateDots();
+    }
+    on(prevBtn, "click", () => !isAnimating && goTo(current - SHOW_PER_PAGE, "prev"));
+    on(nextBtn, "click", () => !isAnimating && goTo(current + SHOW_PER_PAGE, "next"));
+    on(window, "resize", layout);
+    on(window, "DOMContentLoaded", () => {
+      saveOriginalHtml();
+      buildPagination();
+      layout();
+      updateDots();
+    });
+  })();
+  (() => {
+    const root = $(".participants");
+    if (!root) return;
+    const viewport = $(".participants__viewport", root);
+    const track = $(".participants__track", root);
+    const slides = $$(".participants__slide", root);
+    if (!viewport || !track || !slides.length) return;
+    const prevBtns = $$(".participants__arrow--prev", root);
+    const nextBtns = $$(".participants__arrow--next", root);
+    const currentEls = $$(".participants__current", root);
+    const totalEls = $$(".participants__total", root);
+    const TOTAL = slides.length;
+    totalEls.forEach((e) => (e.textContent = TOTAL));
+    currentEls.forEach((e) => (e.textContent = 1));
+    let slidesPerView = 1;
+    let slideWidth = 0;
+    let index = 0;
+    const getGap = () => {
+      const cs = getComputedStyle(track);
+      return parseFloat(cs.columnGap || cs.gap || "0") || 0;
+    };
+    const calcSlidesPerView = () => {
+      const w = viewport.clientWidth;
+      slidesPerView = w >= 1200 ? 3 : w >= 768 ? 2 : 1;
+    };
+    const maxIndex = () => Math.max(0, TOTAL - slidesPerView);
+    const clampIndex = () => (index = Math.max(0, Math.min(index, maxIndex())));
+    const move = () => {
+      const x = -index * (slideWidth + getGap());
+      track.style.transform = `translateX(${x}px)`;
+      currentEls.forEach((e) => (e.textContent = index + 1));
+      viewport.setAttribute("aria-live", "polite");
+    };
+    const updateButtons = () => {
+      const m = maxIndex();
+      prevBtns.forEach((b) => (b.disabled = index === 0));
+      nextBtns.forEach((b) => (b.disabled = index === m));
+    };
+    const layout = () => {
+      calcSlidesPerView();
+      const w = viewport.clientWidth;
+      const gap = getGap();
+      const nextWidth = (w - gap * (slidesPerView - 1)) / slidesPerView;
+      if (Math.abs(nextWidth - slideWidth) < 0.5) {
+        clampIndex();
+        move();
+        updateButtons();
+        return;
+      }
+      slideWidth = nextWidth;
+      slides.forEach((s) => (s.style.width = `${slideWidth}px`));
+      clampIndex();
+      move();
+      updateButtons();
+    };
+    const next = () => {
+      index += 1;
+      clampIndex();
+      move();
+      updateButtons();
+    };
+    const prev = () => {
+      index -= 1;
+      clampIndex();
+      move();
+      updateButtons();
+    };
+    nextBtns.forEach((b) => on(b, "click", next));
+    prevBtns.forEach((b) => on(b, "click", prev));
+    viewport.setAttribute("tabindex", "0");
+    on(viewport, "keydown", (e) => {
+      if (e.key === "ArrowRight") next();
+      else if (e.key === "ArrowLeft") prev();
+    });
+    let startX = null,
+      dx = 0,
+      pid = null;
+    on(viewport, "pointerdown", (e) => {
+      startX = e.clientX;
+      dx = 0;
+      pid = e.pointerId;
+      viewport.setPointerCapture(pid);
+    });
+    on(viewport, "pointermove", (e) => {
+      if (startX == null) return;
+      dx = e.clientX - startX;
+    });
+    on(viewport, "pointerup", () => {
+      if (startX == null) return;
+      if (Math.abs(dx) > slideWidth * 0.25) dx < 0 ? next() : prev();
+      startX = null;
+      dx = 0;
+      pid = null;
+    });
+    let rafId = 0,
+      lastW = 0;
+    const schedule = () => {
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(layout);
+    };
+    if ("ResizeObserver" in window) {
+      const ro = new ResizeObserver((entries) => {
+        const w = Math.round(entries[0].contentRect.width);
+        if (w !== lastW) {
+          lastW = w;
+          schedule();
+        }
+      });
+      ro.observe(viewport);
+    } else on(window, "resize", schedule);
+    on(window, "orientationchange", schedule);
+    let autoTimer = null;
+    const stopAuto = () => {
+      if (autoTimer) {
+        clearInterval(autoTimer);
+        autoTimer = null;
+      }
+    };
+    const startAuto = () => {
+      stopAuto();
+      autoTimer = setInterval(() => {
+        if (index < maxIndex()) next();
+        else stopAuto();
+      }, 4e3);
+    };
+    [...prevBtns, ...nextBtns].forEach((b) => on(b, "click", stopAuto));
+    on(viewport, "pointerdown", stopAuto);
+    on(viewport, "keydown", stopAuto);
+    layout();
+    startAuto();
+  })();
   window["FLS"] = false;
   isWebp();
   pageNavigation();
