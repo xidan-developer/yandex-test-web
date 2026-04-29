@@ -547,18 +547,25 @@
     if (!root) return;
     const viewport = $(".participants__viewport", root);
     const track = $(".participants__track", root);
+    const originalSlides = $$(".participants__slide", root);
+    if (!viewport || !track || !originalSlides.length) return;
+    const ORIGINAL = originalSlides.length;
+    originalSlides.forEach((el) => {
+      const c = el.cloneNode(true);
+      c.setAttribute("aria-hidden", "true");
+      c.querySelectorAll("a, button").forEach((focusable) => focusable.setAttribute("tabindex", "-1"));
+      track.appendChild(c);
+    });
     const slides = $$(".participants__slide", root);
-    if (!viewport || !track || !slides.length) return;
     const prevBtns = $$(".participants__arrow--prev", root);
     const nextBtns = $$(".participants__arrow--next", root);
     const currentEls = $$(".participants__current", root);
     const totalEls = $$(".participants__total", root);
-    const TOTAL = slides.length;
-    totalEls.forEach((e) => (e.textContent = TOTAL));
-    currentEls.forEach((e) => (e.textContent = 1));
+    totalEls.forEach((e) => (e.textContent = ORIGINAL));
     let slidesPerView = 1;
     let slideWidth = 0;
     let index = 0;
+    let settling = false;
     const getGap = () => {
       const cs = getComputedStyle(track);
       return parseFloat(cs.columnGap || cs.gap || "0") || 0;
@@ -567,17 +574,47 @@
       const w = viewport.clientWidth;
       slidesPerView = w >= 1200 ? 3 : w >= 768 ? 2 : 1;
     };
-    const maxIndex = () => Math.max(0, TOTAL - slidesPerView);
-    const clampIndex = () => (index = Math.max(0, Math.min(index, maxIndex())));
-    const move = () => {
+    const maxRealIndex = () => Math.max(0, ORIGINAL - slidesPerView);
+    const clampIndex = () => {
+      if (settling) return;
+      const m = maxRealIndex();
+      if (m <= 0) {
+        index = 0;
+        return;
+      }
+      if (index >= ORIGINAL) index = 0;
+      if (index > m) index = m;
+    };
+    const counterLastVisible = () => {
+      const m = maxRealIndex();
+      if (m <= 0) return ORIGINAL;
+      const first = index % ORIGINAL;
+      const last0 = Math.min(first + slidesPerView - 1, ORIGINAL - 1);
+      return last0 + 1;
+    };
+    const move = (opts = {}) => {
+      const instant = opts.instant === true;
+      if (instant) track.style.transition = "none";
       const x = -index * (slideWidth + getGap());
       track.style.transform = `translateX(${x}px)`;
-      currentEls.forEach((e) => (e.textContent = index + 1));
+      const showLast = counterLastVisible();
+      currentEls.forEach((e) => (e.textContent = showLast));
+      if (instant) {
+        void track.offsetHeight;
+        requestAnimationFrame(() => {
+          track.style.transition = "";
+        });
+      }
     };
     const updateButtons = () => {
-      const m = maxIndex();
-      prevBtns.forEach((b) => (b.disabled = index === 0));
-      nextBtns.forEach((b) => (b.disabled = index === m));
+      const m = maxRealIndex();
+      const locked = m <= 0;
+      prevBtns.forEach((b) => (b.disabled = locked));
+      nextBtns.forEach((b) => (b.disabled = locked));
+    };
+    const moveAndSync = (instant) => {
+      move({ instant });
+      updateButtons();
     };
     const layout = () => {
       calcSlidesPerView();
@@ -596,29 +633,73 @@
       move();
       updateButtons();
     };
-    const next = () => {
-      index += 1;
-      clampIndex();
-      move();
-      updateButtons();
+    const onTrackTransitionEnd = (e) => {
+      if (e.target !== track) return;
+      if (!e.propertyName || !String(e.propertyName).toLowerCase().includes("transform")) return;
+      if (index === ORIGINAL) {
+        index = 0;
+        move({ instant: true });
+      }
+      settling = false;
     };
-    const prev = () => {
-      index -= 1;
-      clampIndex();
-      move();
-      updateButtons();
+    on(track, "transitionend", onTrackTransitionEnd);
+    const AUTO_MS = 4e3;
+    let autoTimer = null;
+    const armAuto = () => {
+      if (autoTimer) clearInterval(autoTimer);
+      autoTimer = setInterval(() => next(false), AUTO_MS);
     };
-    nextBtns.forEach((b) => on(b, "click", next));
-    prevBtns.forEach((b) => on(b, "click", prev));
+    const next = (restartAuto = false) => {
+      const m = maxRealIndex();
+      if (m <= 0 || settling) return;
+      const step = slidesPerView;
+      if (index < m) {
+        const ni = Math.min(index + step, m);
+        if (ni === index) return;
+        index = ni;
+        moveAndSync(false);
+      } else if (index === m) {
+        settling = true;
+        index = ORIGINAL;
+        moveAndSync(false);
+      }
+      if (restartAuto) armAuto();
+    };
+    const prev = (restartAuto = false) => {
+      const m = maxRealIndex();
+      if (m <= 0 || settling) return;
+      const step = slidesPerView;
+      if (index > 0) {
+        index = Math.max(index - step, 0);
+        moveAndSync(false);
+      } else {
+        settling = true;
+        index = ORIGINAL;
+        move({ instant: true });
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            index = m;
+            moveAndSync(false);
+          });
+        });
+      }
+      if (restartAuto) armAuto();
+    };
+    nextBtns.forEach((b) => on(b, "click", () => next(true)));
+    prevBtns.forEach((b) => on(b, "click", () => prev(true)));
     viewport.setAttribute("tabindex", "0");
     on(viewport, "keydown", (e) => {
-      if (e.key === "ArrowRight") next();
-      else if (e.key === "ArrowLeft") prev();
+      if (e.key === "ArrowRight") next(true);
+      else if (e.key === "ArrowLeft") prev(true);
     });
     let startX = null,
       dx = 0,
       pid = null;
     on(viewport, "pointerdown", (e) => {
+      if (autoTimer) {
+        clearInterval(autoTimer);
+        autoTimer = null;
+      }
       startX = e.clientX;
       dx = 0;
       pid = e.pointerId;
@@ -628,13 +709,22 @@
       if (startX == null) return;
       dx = e.clientX - startX;
     });
-    on(viewport, "pointerup", () => {
+    const endPointerGesture = (resumeAuto) => {
       if (startX == null) return;
-      if (Math.abs(dx) > slideWidth * 0.25) dx < 0 ? next() : prev();
+      const savedDx = dx;
+      const savedPid = pid;
       startX = null;
       dx = 0;
       pid = null;
-    });
+      try {
+        if (savedPid != null) viewport.releasePointerCapture(savedPid);
+      } catch (_) {}
+      if (Math.abs(savedDx) > slideWidth * 0.25) savedDx < 0 ? next(true) : prev(true);
+      else if (resumeAuto) armAuto();
+    };
+    on(viewport, "pointerup", () => endPointerGesture(true));
+    on(viewport, "pointercancel", () => endPointerGesture(true));
+    on(viewport, "lostpointercapture", () => endPointerGesture(true));
     let rafId = 0,
       lastW = 0;
     const schedule = () => {
@@ -652,25 +742,8 @@
       ro.observe(viewport);
     } else on(window, "resize", schedule);
     on(window, "orientationchange", schedule);
-    let autoTimer = null;
-    const stopAuto = () => {
-      if (autoTimer) {
-        clearInterval(autoTimer);
-        autoTimer = null;
-      }
-    };
-    const startAuto = () => {
-      stopAuto();
-      autoTimer = setInterval(() => {
-        if (index < maxIndex()) next();
-        else stopAuto();
-      }, 4e3);
-    };
-    [...prevBtns, ...nextBtns].forEach((b) => on(b, "click", stopAuto));
-    on(viewport, "pointerdown", stopAuto);
-    on(viewport, "keydown", stopAuto);
     layout();
-    startAuto();
+    armAuto();
   })();
   window["FLS"] = false;
   pageNavigation();
