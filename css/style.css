@@ -276,28 +276,6 @@ h2 {
     transform: translateY(0);
   }
 }
-@-webkit-keyframes promo-photo-float {
-  0%,
-  100% {
-    -webkit-transform: translateY(0);
-    transform: translateY(0);
-  }
-  50% {
-    -webkit-transform: translateY(-0.875rem);
-    transform: translateY(-0.875rem);
-  }
-}
-@keyframes promo-photo-float {
-  0%,
-  100% {
-    -webkit-transform: translateY(0);
-    transform: translateY(0);
-  }
-  50% {
-    -webkit-transform: translateY(-0.875rem);
-    transform: translateY(-0.875rem);
-  }
-}
 .participants__arrow:focus-visible,
 .promo__button:focus-visible,
 a:focus-visible {
@@ -411,8 +389,6 @@ a:focus-visible {
 .promo__image-picture {
   max-width: 100%;
   height: auto;
-  -webkit-animation: promo-photo-float 5.5s ease-in-out infinite;
-  animation: promo-photo-float 5.5s ease-in-out infinite;
 }
 .promo__running {
   position: absolute;
@@ -1360,8 +1336,7 @@ a:focus-visible {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
-  .promo__background,
-  .promo__image-picture {
+  .promo__background {
     -webkit-animation: none !important;
     animation: none !important;
   }
